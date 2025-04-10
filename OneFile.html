@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>GEO NAVIGATOR</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-image: linear-gradient(120deg, #000428, #004e92);
+            color: white;
+            text-align: center;
+        }
+        #map {
+            height: 100vh;
+            width: 100vw;
+            margin: 0;
+            border: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .leaflet-control-geocoder {
+            max-width: 300px;
+        }
+        .search-boxes {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 1001;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .search-boxes input {
+            padding: 6px;
+            margin: 5px;
+            width: 180px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        #searchRoute {
+            background-color: #28a745;
+        }
+        #searchRoute:hover {
+            background-color: #1e7e34;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button id="locateButton"><i class="fas fa-location-crosshairs"></i></button>
+        <button id="sosButton">Send SOS</button>
+        <button id="resetButton">Reset</button>
+    </div>
+
+    <div class="search-boxes" id="searchBoxes">
+        <input type="text" id="startInput" placeholder="Start location">
+        <input type="text" id="endInput" placeholder="Destination">
+        <button id="searchRoute">Search Route</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <script>
+        var map = L.map('map', {
+            center: [20, 78],
+            zoom: 5,
+            maxZoom: 16,
+            minZoom: 3
+        });
+
+        var apiKey = 'MpRBKxsLFj6qBSDPJkPp';
+        var userMarker = null;
+        var searchMarker = null;
+        var startMarker = null;
+        var endMarker = null;
+
+        function mapTilerLayer(style) {
+            return L.tileLayer(`https://api.maptiler.com/maps/${style}/{z}/{x}/{y}.png?key=${apiKey}`, {
+                attribution: '&copy; MapTiler & OpenStreetMap contributors',
+                maxZoom: 20
+            });
+        }
+
+        var baseLayers = {
+            "Satellite": L.tileLayer(`https://api.maptiler.com/maps/satellite/{z}/{x}/{y}.jpg?key=${apiKey}`, {
+                attribution: '&copy; MapTiler & OpenStreetMap contributors'
+            }),
+            "Backdrop": mapTilerLayer("backdrop"),
+            "Basic": mapTilerLayer("basic"),
+            "Bright": mapTilerLayer("bright"),
+            "Landscape": mapTilerLayer("landscape"),
+            "Ocean": mapTilerLayer("ocean"),
+            "Outdoor": mapTilerLayer("outdoor"),
+            "Streets": mapTilerLayer("streets"),
+            "Toner": mapTilerLayer("toner"),
+            "Topo": mapTilerLayer("topo"),
+        };
+
+        baseLayers["Streets"].addTo(map);
+        L.control.layers(baseLayers).addTo(map);
+
+        var geocoder = L.Control.geocoder({
+            defaultMarkGeocode: false
+        }).on('markgeocode', function(e) {
+            var center = e.geocode.center;
+            map.setView(center, 13);
+            if (searchMarker) map.removeLayer(searchMarker);
+            searchMarker = L.marker(center).addTo(map)
+                .bindPopup(e.geocode.name)
+                .openPopup();
+        }).addTo(map);
+
+        document.getElementById('locateButton').addEventListener('click', function() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var lat = position.coords.latitude;
+                    var lng = position.coords.longitude;
+                    map.setView([lat, lng], 15);
+                    if (userMarker) map.removeLayer(userMarker);
+                    userMarker = L.marker([lat, lng]).addTo(map)
+                        .bindPopup("You are here").openPopup();
+                }, function(error) {
+                    alert("Error getting location: " + error.message);
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        });
+
+        document.getElementById('resetButton').addEventListener('click', function() {
+            map.setView([20, 78], 5);
+
+            [userMarker, searchMarker, startMarker, endMarker].forEach(marker => {
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+            });
+
+            userMarker = searchMarker = startMarker = endMarker = null;
+
+            document.getElementById("startInput").value = "";
+            document.getElementById("endInput").value = "";
+        });
+
+        document.getElementById('sosButton').addEventListener('click', function() {
+            alert("SOS signal sent! (Feature coming soon)");
+        });
+
+        function geocodePlace(query) {
+            const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+            return fetch(url).then(res => res.json());
+        }
+
+        document.getElementById("searchRoute").addEventListener("click", async () => {
+            const startPlace = document.getElementById("startInput").value;
+            const endPlace = document.getElementById("endInput").value;
+
+            if (!startPlace || !endPlace) {
+                alert("Please enter both start and destination locations.");
+                return;
+            }
+
+            const [startResults, endResults] = await Promise.all([
+                geocodePlace(startPlace),
+                geocodePlace(endPlace)
+            ]);
+
+            if (startResults.length === 0 || endResults.length === 0) {
+                alert("One or both locations not found.");
+                return;
+            }
+
+            const startCoord = [parseFloat(startResults[0].lat), parseFloat(startResults[0].lon)];
+            const endCoord = [parseFloat(endResults[0].lat), parseFloat(endResults[0].lon)];
+
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+
+            startMarker = L.marker(startCoord).addTo(map).bindPopup("Start: " + startResults[0].display_name).openPopup();
+            endMarker = L.marker(endCoord).addTo(map).bindPopup("Destination: " + endResults[0].display_name).openPopup();
+
+            const bounds = L.latLngBounds([startCoord, endCoord]);
+            map.fitBounds(bounds.pad(0.3));
+        });
+    </script>
+</body>
+</html>
